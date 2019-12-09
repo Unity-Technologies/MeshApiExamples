@@ -29,7 +29,9 @@ all input meshes. This is very similar to how Static Batching in Unity works.
 ![Combine1](/Images/Combine1.png?raw=true "Combine 1")
 ![Combine2](/Images/Combine2.png?raw=true "Combine 2")
 
-`Assets/CreateMeshFromAllSceneMeshes` is the sample scene and code.
+`Assets/CreateMeshFromAllSceneMeshes` is the sample scene and code. The script registers two menu items under `Mesh API Test`
+top-level menu; both do the same thing just one uses "traditional" Mesh API and does everything on the main thread, whereas
+the other uses 2020.1 new APIs to do it in C# Jobs with Burst.
 
 Numbers for 11466 input objects, total 4.6M vertices, on 2018 MacBookPro (Core i9 2.9GHz):
 
