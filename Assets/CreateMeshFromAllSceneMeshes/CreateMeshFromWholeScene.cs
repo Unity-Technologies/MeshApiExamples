@@ -42,16 +42,16 @@ public class CreateSceneMesh : MonoBehaviour
         var meshFilters = FindObjectsOfType<MeshFilter>();
         smp1.End();
 
+        // Need to figure out how large the output mesh needs to be (in terms of vertex/index count),
+        // as well as get transforms and vertex/index location offsets for each mesh.
         smp2.Begin();
         var jobs = new ProcessMeshDataJob();
-        jobs.vertexStart = new NativeArray<int>(meshFilters.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-        jobs.triStart = new NativeArray<int>(meshFilters.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-        jobs.xform = new NativeArray<float4x4>(meshFilters.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        jobs.CreateInputArrays(meshFilters.Length);
         var inputMeshes = new List<Mesh>(meshFilters.Length);
         
-        int vertexStart = 0;
-        int triStart = 0;
-        int meshCount = 0;
+        var vertexStart = 0;
+        var indexStart = 0;
+        var meshCount = 0;
         for (var i = 0; i < meshFilters.Length; ++i)
         {
             var mf = meshFilters[i];
@@ -63,41 +63,43 @@ public class CreateSceneMesh : MonoBehaviour
             }
 
             var mesh = mf.sharedMesh;
-            var vcount = mesh.vertexCount;
-            var icount = (int)mesh.GetIndexCount(0);
             inputMeshes.Add(mesh);
             jobs.vertexStart[meshCount] = vertexStart;
-            jobs.triStart[meshCount] = triStart;
+            jobs.indexStart[meshCount] = indexStart;
             jobs.xform[meshCount] = go.transform.localToWorldMatrix;
-            vertexStart += vcount;
-            triStart += icount;
+            vertexStart += mesh.vertexCount;
+            indexStart += (int)mesh.GetIndexCount(0);
+            jobs.bounds[meshCount] = new float3x2(new float3(Mathf.Infinity), new float3(Mathf.NegativeInfinity));
             ++meshCount;
         }
         smp2.End();
 
+        // Acquire read-only data for input meshes
         jobs.meshData = Mesh.AcquireReadOnlyMeshData(inputMeshes);
-        var outputMeshData = Mesh.AllocateWritableMeshData(1);
         
+        // Create and initialize writable data for the output mesh
+        var outputMeshData = Mesh.AllocateWritableMeshData(1);
         jobs.outputMesh = outputMeshData[0];
-        jobs.outputMesh.SetIndexBufferParams(triStart, IndexFormat.UInt32);
+        jobs.outputMesh.SetIndexBufferParams(indexStart, IndexFormat.UInt32);
         jobs.outputMesh.SetVertexBufferParams(vertexStart,
             new VertexAttributeDescriptor(VertexAttribute.Position),
             new VertexAttributeDescriptor(VertexAttribute.Normal, stream:1));
-        jobs.bounds = new NativeArray<float3x2>(meshCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-        for (var i = 0; i < meshCount; ++i)
-            jobs.bounds[i] = new float3x2(new float3(Mathf.Infinity), new float3(Mathf.NegativeInfinity));
-        
+
+        // Launch mesh processing jobs
         var handle = jobs.Schedule(meshCount, 4);
 
+        // Create destination Mesh object
         smp3.Begin();
         var newMesh = new Mesh();
         newMesh.name = "CombinedMesh";
-        var sm = new SubMeshDescriptor(0, triStart, MeshTopology.Triangles);
+        var sm = new SubMeshDescriptor(0, indexStart, MeshTopology.Triangles);
         sm.firstVertex = 0;
         sm.vertexCount = vertexStart;
         
+        // Wait for jobs to finish, since we'll have to access the produced mesh/bounds data at this point
         handle.Complete();
-        
+
+        // Final bounding box of the whole mesh is union of the bounds of individual transformed meshes
         var bounds = new float3x2(new float3(Mathf.Infinity), new float3(Mathf.NegativeInfinity));
         for (var i = 0; i < meshCount; ++i)
         {
@@ -105,19 +107,20 @@ public class CreateSceneMesh : MonoBehaviour
             bounds.c0 = math.min(bounds.c0, b.c0);
             bounds.c1 = math.max(bounds.c1, b.c1);
         }
-
         sm.bounds = new Bounds((bounds.c0+bounds.c1)*0.5f, bounds.c1-bounds.c0);
         jobs.outputMesh.subMeshCount = 1;
         jobs.outputMesh.SetSubMesh(0, sm, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
         Mesh.ApplyAndDisposeWritableMeshData(outputMeshData, new[]{newMesh}, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
         newMesh.bounds = sm.bounds;
         smp3.End();
+        
+        // Dispose of the read-only mesh data and temporary bounds array
         smp4.Begin();
         jobs.meshData.Dispose();
         jobs.bounds.Dispose();
-        
         smp4.End();
-        
+
+        // Create new GameObject with the new mesh
         var newGo = new GameObject("CombinedMesh", typeof(MeshFilter), typeof(MeshRenderer));
         newGo.tag = "EditorOnly";
         var newMf = newGo.GetComponent<MeshFilter>();
@@ -137,13 +140,21 @@ public class CreateSceneMesh : MonoBehaviour
     {
         [ReadOnly] public Mesh.MeshDataArray meshData;
         public Mesh.MeshData outputMesh;
-        [DeallocateOnJobCompletion] public NativeArray<int> vertexStart;
-        [DeallocateOnJobCompletion] public NativeArray<int> triStart;
-        [DeallocateOnJobCompletion] public NativeArray<float4x4> xform;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<int> vertexStart;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<int> indexStart;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<float4x4> xform;
         public NativeArray<float3x2> bounds;
 
-        [NativeDisableContainerSafetyRestriction] public NativeArray<float3> tempVertices;
-        [NativeDisableContainerSafetyRestriction] public NativeArray<float3> tempNormals;
+        [NativeDisableContainerSafetyRestriction] NativeArray<float3> tempVertices;
+        [NativeDisableContainerSafetyRestriction] NativeArray<float3> tempNormals;
+
+        public void CreateInputArrays(int meshCount)
+        {
+            vertexStart = new NativeArray<int>(meshCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            indexStart = new NativeArray<int>(meshCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            xform = new NativeArray<float4x4>(meshCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            bounds = new NativeArray<float3x2>(meshCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        }
 
         public void Execute(int index)
         {
@@ -152,6 +163,7 @@ public class CreateSceneMesh : MonoBehaviour
             var mat = xform[index];
             var vStart = vertexStart[index];
 
+            // Allocate temporary arrays for input mesh vertices/normals
             if (!tempVertices.IsCreated || tempVertices.Length < vCount)
             {
                 if (tempVertices.IsCreated) tempVertices.Dispose();
@@ -162,12 +174,16 @@ public class CreateSceneMesh : MonoBehaviour
                 if (tempNormals.IsCreated) tempNormals.Dispose();
                 tempNormals = new NativeArray<float3>(vCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
             }
+            // Read input mesh vertices/normals into temporary arrays -- this will
+            // do any necessary format conversions into float3 data
             data.GetVertices(tempVertices.Reinterpret<Vector3>());
             data.GetNormals(tempNormals.Reinterpret<Vector3>());
             
             var outputVerts = outputMesh.GetVertexData<Vector3>();
             var outputNormals = outputMesh.GetVertexData<Vector3>(stream:1);
 
+            // Transform input mesh vertices/normals, write into destination mesh,
+            // compute transformed mesh bounds.
             var b = bounds[index];
             for (var i = 0; i < vCount; ++i)
             {
@@ -182,26 +198,21 @@ public class CreateSceneMesh : MonoBehaviour
             }
             bounds[index] = b;
 
-            var tStart = triStart[index];
+            // Write input mesh indices into destination index buffer
+            var tStart = indexStart[index];
             var tCount = data.GetSubMesh(0).indexCount;
             var outputTris = outputMesh.GetIndexData<int>();
             if (data.indexFormat == IndexFormat.UInt16)
             {
                 var tris = data.GetIndexData<ushort>();
                 for (var i = 0; i < tCount; ++i)
-                {
-                    int idx = tris[i];
-                    outputTris[i + tStart] = vStart + idx;
-                }
+                    outputTris[i + tStart] = vStart + tris[i];
             }
             else
             {
                 var tris = data.GetIndexData<int>();
                 for (var i = 0; i < tCount; ++i)
-                {
-                    int idx = tris[i];
-                    outputTris[i + tStart] = vStart + idx;
-                }
+                    outputTris[i + tStart] = vStart + tris[i];
             }
         }
     }
