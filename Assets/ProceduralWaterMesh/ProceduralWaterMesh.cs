@@ -46,10 +46,18 @@ public class ProceduralWaterMesh : MonoBehaviour
 	{
 		m_LocalTime += Time.deltaTime * 2.0f;
 		UpdateWaveSourcePositions();
+		var job = new WaveJob { vertices = m_Vertices, waveSourcePositions = m_WaveSourcePositions, time = m_LocalTime };
 		if (!useJobs)
-			UpdateWaterMeshClassicApi();
+		{
+			for (int i = 0; i < m_Vertices.Length; i++)
+				job.Execute(i);
+		}
 		else
-			UpdateWaterMeshJobs();
+		{
+			job.Schedule(m_Vertices.Length, 16).Complete();
+		}
+		m_Mesh.SetVertices(m_Vertices);
+		m_Mesh.RecalculateNormals();
 	}
 
 	void UpdateWaveSourcePositions()
@@ -58,23 +66,6 @@ public class ProceduralWaterMesh : MonoBehaviour
 		{
 			m_WaveSourcePositions[i] = m_WaveSources[i].position;
 		}
-	}
-
-	void UpdateWaterMeshClassicApi()
-	{
-		var job = new WaveJob { vertices = m_Vertices, waveSourcePositions = m_WaveSourcePositions, time = m_LocalTime };
-		for (int i = 0; i < m_Vertices.Length; i++)
-			job.Execute(i);
-		m_Mesh.SetVertices(m_Vertices);
-		m_Mesh.RecalculateNormals();
-	}
-
-	void UpdateWaterMeshJobs()
-	{
-		var job = new WaveJob { vertices = m_Vertices, waveSourcePositions = m_WaveSourcePositions, time = m_LocalTime };
-		job.Schedule(m_Vertices.Length, 16).Complete();
-		m_Mesh.SetVertices(m_Vertices);
-		m_Mesh.RecalculateNormals();
 	}
 
 	[BurstCompile]
@@ -139,10 +130,8 @@ public class ProceduralWaterMesh : MonoBehaviour
 		return newMesh;
 	}
 
-	float MapValue(float refValue, float refMin, float refMax, float targetMin, float targetMax)
+	static float MapValue(float refValue, float refMin, float refMax, float targetMin, float targetMax)
 	{
-		/* This function converts the value of a variable (reference value) from one range (reference range) to another (target range)
-		in this example it is used to convert the x and z value to the correct range, while creating the mesh, in the CreateMesh() function*/
 		return targetMin + (refValue - refMin) * (targetMax - targetMin) / (refMax - refMin);
 	}
 }
