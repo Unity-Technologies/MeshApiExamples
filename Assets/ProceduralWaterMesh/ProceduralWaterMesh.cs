@@ -1,10 +1,17 @@
 ﻿using System.Linq;
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 // Simple water wave procedural mesh based on http://www.konsfik.com/procedural-water-surface-made-in-unity3d/ - written by Kostas Sfikas, March 2017.
 //
-// "Classic API" with 250x250 vertex mesh, 4 wave sources, on 2018 MacBookPro (Core i9 2.9GHz):
-// - 26.0ms, no GC allocations
+// Tests on 250x250 vertex mesh, 4 wave sources, on 2018 MacBookPro (Core i9 2.9GHz):
+// "Classic API":
+// - 28.0ms, no GC allocations
+//
+// Jobs without Burst:
+// - 5.8ms (2.4ms job, 1.4ms RecalcNormals, 2.0ms unaccounted probably SetVertices)
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class ProceduralWaterMesh : MonoBehaviour
@@ -15,16 +22,22 @@ public class ProceduralWaterMesh : MonoBehaviour
 	public int surfaceWidthPoints = 100;
 	public int surfaceLengthPoints = 100;
 	Transform[] m_WaveSources;
-	Vector3[] m_WaveSourcePositions;
-	Vector3[] m_Vertices;
+	NativeArray<Vector3> m_WaveSourcePositions;
+	NativeArray<Vector3> m_Vertices;
 	Mesh m_Mesh;
 	float m_LocalTime = 0.0f;
 
-	void Awake()
+	void OnEnable()
 	{
 		m_Mesh = CreateMesh();
 		m_WaveSources = transform.Cast<Transform>().Where(t => t.gameObject.activeInHierarchy).ToArray();
-		m_WaveSourcePositions = new Vector3[m_WaveSources.Length];
+		m_WaveSourcePositions = new NativeArray<Vector3>(m_WaveSources.Length, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+	}
+
+	void OnDisable()
+	{
+		m_WaveSourcePositions.Dispose();
+		m_Vertices.Dispose();
 	}
 
 	void Update()
@@ -47,36 +60,47 @@ public class ProceduralWaterMesh : MonoBehaviour
 
 	void UpdateWaterMeshClassicApi()
 	{
-		var verts = m_Vertices;
-		for (int i = 0; i < verts.Length; i++)
-			verts[i] = RecalculatePointY(verts[i]);
-		m_Mesh.vertices = verts;
+		var job = new WaveJob { vertices = m_Vertices, waveSourcePositions = m_WaveSourcePositions, time = m_LocalTime };
+		for (int i = 0; i < m_Vertices.Length; i++)
+			job.Execute(i);
+		m_Mesh.SetVertices(m_Vertices);
 		m_Mesh.RecalculateNormals();
 	}
 
 	void UpdateWaterMeshJobs()
 	{
-		//@TODO
+		var job = new WaveJob { vertices = m_Vertices, waveSourcePositions = m_WaveSourcePositions, time = m_LocalTime };
+		job.Schedule(m_Vertices.Length, 16).Complete();
+		m_Mesh.SetVertices(m_Vertices);
+		m_Mesh.RecalculateNormals();
 	}
 
-	Vector3 RecalculatePointY(Vector3 p)
+	struct WaveJob : IJobParallelFor
 	{
-		var y = 0.0f;
-		for (var i = 0; i < m_WaveSourcePositions.Length; i++)
+		public NativeArray<Vector3> vertices;
+		[ReadOnly] [NativeDisableParallelForRestriction] public NativeArray<Vector3> waveSourcePositions;
+		public float time;
+
+		public void Execute(int index)
 		{
-			var p1 = new Vector2 (p.x, p.z);
-			var p2 = new Vector2 (m_WaveSourcePositions[i].x, m_WaveSourcePositions[i].z);
-			var dist = Vector2.Distance (p1,p2);
-			y += Mathf.Sin (dist * 12.0f - m_LocalTime) / (dist*20+10);
+			var p = vertices[index];
+			var y = 0.0f;
+			for (var i = 0; i < waveSourcePositions.Length; i++)
+			{
+				var p1 = new Vector2 (p.x, p.z);
+				var p2 = new Vector2 (waveSourcePositions[i].x, waveSourcePositions[i].z);
+				var dist = Vector2.Distance (p1,p2);
+				y += Mathf.Sin (dist * 12.0f - time) / (dist*20+10);
+			}
+			p.y = y;
+			vertices[index] = p;
 		}
-		p.y = y;
-		return p;
 	}
 
 	Mesh CreateMesh()
 	{
 		Mesh newMesh = new Mesh();
-		m_Vertices = new Vector3[surfaceWidthPoints * surfaceLengthPoints];
+		m_Vertices = new NativeArray<Vector3>(surfaceWidthPoints * surfaceLengthPoints, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 		var indices = new int[(surfaceWidthPoints - 1) * (surfaceLengthPoints - 1) * 6];
 		var index = 0;
 		for (var i = 0; i < surfaceWidthPoints; i++)
@@ -104,7 +128,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 			}
 		}
 		
-		newMesh.vertices = m_Vertices;
+		newMesh.SetVertices(m_Vertices);
 		newMesh.triangles = indices;
 		newMesh.RecalculateNormals();
 		GetComponent<MeshFilter>().mesh = newMesh;
