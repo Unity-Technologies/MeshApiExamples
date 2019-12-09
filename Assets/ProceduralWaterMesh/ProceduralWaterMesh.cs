@@ -6,12 +6,14 @@ using UnityEngine;
 
 // Simple water wave procedural mesh based on http://www.konsfik.com/procedural-water-surface-made-in-unity3d/ - written by Kostas Sfikas, March 2017.
 //
-// Tests on 250x250 vertex mesh, 4 wave sources, on 2018 MacBookPro (Core i9 2.9GHz):
+// Tests on 250x250 vertex mesh, 10 wave sources, on 2018 MacBookPro (Core i9 2.9GHz):
 // "Classic API":
-// - 28.0ms, no GC allocations
+// - 66.0ms, no GC allocations
 //
 // Jobs without Burst:
-// - 5.8ms (2.4ms job, 1.4ms RecalcNormals, 2.0ms unaccounted probably SetVertices)
+// - 11.2ms (9.6ms job, 1.4ms RecalcNormals, some unaccounted)
+// Jobs with Burst:
+// - 3.9ms (2.4ms job, 1.4ms RecalcNormals, some unaccounted)
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 public class ProceduralWaterMesh : MonoBehaviour
@@ -75,6 +77,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 		m_Mesh.RecalculateNormals();
 	}
 
+	[BurstCompile]
 	struct WaveJob : IJobParallelFor
 	{
 		public NativeArray<Vector3> vertices;
