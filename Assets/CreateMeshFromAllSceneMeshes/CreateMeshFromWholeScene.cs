@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Profiling;
@@ -26,14 +27,17 @@ public class CreateSceneMesh : MonoBehaviour
     // ----------------------------------------------------------------------------------------------------------------
     // New Unity 2020.1 MeshData API
     //
-    // Took 0.08sec for 11466 objects, total 4676490 verts (MacBookPro 2018, 2.9GHz i9)
-    // Profiler: 78ms (GC alloc 277KB):
-    // - Create Mesh 67ms (mostly waiting for jobs)
-    // - Prepare 8ms
+    // Took 0.06sec for 11466 objects, total 4676490 verts (MacBookPro 2018, 2.9GHz i9)
+    // Profiler: 59ms (GC alloc 275KB):
+    // - Create Mesh 47ms (mostly waiting for jobs)
+    // - Prepare 8ms (89KB GC alloc)
+    // - FindMeshes 2.1ms (180KB GC alloc)
     [MenuItem("Mesh API Test/Create Mesh From Scene - New API %G")]
     public static void CreateMesh_MeshDataApi()
     {
         var sw = Stopwatch.StartNew();
+        
+        // Find all MeshFilter objects in the scene
         smp1.Begin();
         var meshFilters = FindObjectsOfType<MeshFilter>();
         smp1.End();
@@ -110,9 +114,6 @@ public class CreateSceneMesh : MonoBehaviour
         smp3.End();
         smp4.Begin();
         jobs.meshData.Dispose();
-        jobs.vertexStart.Dispose();
-        jobs.triStart.Dispose();
-        jobs.xform.Dispose();
         jobs.bounds.Dispose();
         
         smp4.End();
@@ -136,10 +137,13 @@ public class CreateSceneMesh : MonoBehaviour
     {
         [ReadOnly] public Mesh.MeshDataArray meshData;
         public Mesh.MeshData outputMesh;
-        public NativeArray<int> vertexStart;
-        public NativeArray<int> triStart;
-        public NativeArray<float4x4> xform;
+        [DeallocateOnJobCompletion] public NativeArray<int> vertexStart;
+        [DeallocateOnJobCompletion] public NativeArray<int> triStart;
+        [DeallocateOnJobCompletion] public NativeArray<float4x4> xform;
         public NativeArray<float3x2> bounds;
+
+        [NativeDisableContainerSafetyRestriction] public NativeArray<float3> tempVertices;
+        [NativeDisableContainerSafetyRestriction] public NativeArray<float3> tempNormals;
 
         public void Execute(int index)
         {
@@ -147,12 +151,19 @@ public class CreateSceneMesh : MonoBehaviour
             var vCount = data.vertexCount;
             var mat = xform[index];
             var vStart = vertexStart[index];
-            
-            var verts = new NativeArray<float3>(vCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-            data.GetVertices(verts.Reinterpret<Vector3>());
-            
-            var normals = new NativeArray<float3>(vCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
-            data.GetNormals(normals.Reinterpret<Vector3>());
+
+            if (!tempVertices.IsCreated || tempVertices.Length < vCount)
+            {
+                if (tempVertices.IsCreated) tempVertices.Dispose();
+                tempVertices = new NativeArray<float3>(vCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            }
+            if (!tempNormals.IsCreated || tempNormals.Length < vCount)
+            {
+                if (tempNormals.IsCreated) tempNormals.Dispose();
+                tempNormals = new NativeArray<float3>(vCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+            }
+            data.GetVertices(tempVertices.Reinterpret<Vector3>());
+            data.GetNormals(tempNormals.Reinterpret<Vector3>());
             
             var outputVerts = outputMesh.GetVertexData<Vector3>();
             var outputNormals = outputMesh.GetVertexData<Vector3>(stream:1);
@@ -160,19 +171,16 @@ public class CreateSceneMesh : MonoBehaviour
             var b = bounds[index];
             for (var i = 0; i < vCount; ++i)
             {
-                var pos = verts[i];
+                var pos = tempVertices[i];
                 pos = math.mul(mat, new float4(pos, 1)).xyz;
                 outputVerts[i+vStart] = pos;
-                var nor = normals[i];
+                var nor = tempNormals[i];
                 nor = math.normalize(math.mul(mat, new float4(nor, 0)).xyz);
                 outputNormals[i+vStart] = nor;
                 b.c0 = math.min(b.c0, pos);
                 b.c1 = math.max(b.c1, pos);
             }
             bounds[index] = b;
-
-            verts.Dispose();
-            normals.Dispose();
 
             var tStart = triStart[index];
             var tCount = data.GetSubMesh(0).indexCount;
@@ -202,10 +210,11 @@ public class CreateSceneMesh : MonoBehaviour
     // "Traditional" Mesh API
     //
     // Took 0.76sec for 11467 objects, total 4676490 verts (MacBookPro 2018, 2.9GHz i9)
-    // Profiler: 703ms (GC alloc 505MB):
-    // - Prepare 340ms (23k GC allocs total 505MB),
+    // Profiler: 703ms (640MB GC alloc):
+    // - Prepare 340ms (23k GC allocs total 640MB),
     // - Recalculate Normals 214ms,
     // - Create Mesh 142ms,
+    // - FindMeshes 2ms (180KB GC alloc)
     [MenuItem("Mesh API Test/Create Mesh From Scene - Classic Api %J")]
     public static void CreateMesh_ClassicApi()
     {
