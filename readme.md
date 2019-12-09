@@ -2,7 +2,7 @@
 
 Unity 2020.1 adds `MeshData` APIs for C# Jobs/Burst compatible way of reading & writing Mesh data; see [overview document](https://docs.google.com/document/d/1QC7NV7JQcvibeelORJvsaTReTyszllOlxdfEsaVL2oA/edit).
 
-This repository contains several small examples of that. Required Unity version is *2020.1 alpha 17* or later.
+This repository contains several small examples of that. Required Unity version is **2020.1 alpha 17** or later.
 
 ## Procedural Water/Wave Mesh
 
