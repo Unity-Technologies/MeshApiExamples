@@ -19,6 +19,12 @@ Numbers on 250x250 water mesh, with 10 wave source objects, on 2018 MacBookPro (
 - Regular API: 66ms,
 - Jobs+Burst: 3.9ms.
 
+Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads:
+
+- Regular API: 83ms
+- Jobs+Burst: 2.9ms
+
+
 
 ## Combine Many Input Meshes Into One
 
@@ -37,3 +43,8 @@ Numbers for 11466 input objects, total 4.6M vertices, on 2018 MacBookPro (Core i
 
 - Regular API: 760ms (and 23k GC allocations totaling 640MB)
 - Jobs+Burst: 60ms (0.3MB GC allocations)
+
+Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads:
+
+- Regular API: 920ms
+- Jobs+Burst: 70ms
