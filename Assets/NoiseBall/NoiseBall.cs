@@ -1,4 +1,6 @@
+using Unity.Burst;
 using Unity.Collections;
+using Unity.Jobs;
 using Unity.Mathematics;
 using static Unity.Mathematics.math;
 using UnityEngine;
@@ -10,6 +12,14 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(MeshRenderer))]
 public class NoiseBall : MonoBehaviour
 {
+    public enum Mode
+    {
+        CPU,
+        CPUBurst,
+        CPUBurstThreaded,
+    }
+
+    public Mode m_Mode = Mode.CPU;
     public int m_TriangleCount = 100;
     public float m_TriangleExtent = 0.1f;
     public float m_ShuffleSpeed = 4.0f;
@@ -60,10 +70,10 @@ public class NoiseBall : MonoBehaviour
             m_VertexPos = new NativeArray<Vector3>(m_TriangleCount * 3, Allocator.Persistent);
             m_VertexNor = new NativeArray<Vector3>(m_TriangleCount * 3, Allocator.Persistent);
 
-            m_Mesh.SetIndexBufferParams(m_TriangleCount * 3, IndexFormat.UInt16);
-            var ib = new NativeArray<ushort>(m_TriangleCount * 3, Allocator.Temp);
+            m_Mesh.SetIndexBufferParams(m_TriangleCount * 3, IndexFormat.UInt32);
+            var ib = new NativeArray<int>(m_TriangleCount * 3, Allocator.Temp);
             for (var i = 0; i < m_TriangleCount * 3; ++i)
-                ib[i] = (ushort)i;
+                ib[i] = i;
             m_Mesh.SetIndexBufferData(ib, 0, 0, ib.Length, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices);
             ib.Dispose();
             var submesh = new SubMeshDescriptor(0, m_TriangleCount * 3, MeshTopology.Triangles);
@@ -73,21 +83,24 @@ public class NoiseBall : MonoBehaviour
             GetComponent<MeshFilter>().sharedMesh = m_Mesh;
         }
         
-        UpdateMeshCpu();
+        UpdateMeshCpu(Time.time);
         
         // move the noise field
         m_NoiseOffset += m_NoiseMotion * Time.deltaTime;
     }
-
-    void UpdateMeshCpu()
+    
+    [BurstCompile]
+    struct NoiseMeshJob : IJobParallelFor
     {
-        float pTime = Time.time * m_ShuffleSpeed;
-        float pExtent = m_TriangleExtent;
-        float pNoiseFrequency = m_NoiseFrequency;
-        float pNoiseAmplitude = m_NoiseAmplitude;
-        float3 pNoiseOffset = m_NoiseOffset;
-        
-        for (int id = 0; id < m_TriangleCount; ++id)
+        [NativeDisableParallelForRestriction] public NativeArray<Vector3> vertices;
+        [NativeDisableParallelForRestriction] public NativeArray<Vector3> normals;
+        public float pTime;
+        public float pExtent;
+        public float pNoiseFrequency;
+        public float pNoiseAmplitude;
+        public float3 pNoiseOffset;
+
+        public void Execute(int id)
         {
             int idx1 = id * 3;
             int idx2 = id * 3 + 1;
@@ -115,13 +128,41 @@ public class NoiseBall : MonoBehaviour
 
             float3 n = normalize(cross(v2 - v1, v3 - v2));
 
-            m_VertexPos[idx1] = v1;
-            m_VertexPos[idx2] = v2;
-            m_VertexPos[idx3] = v3;
-            m_VertexNor[idx1] = n;
-            m_VertexNor[idx2] = n;
-            m_VertexNor[idx3] = n;
+            vertices[idx1] = v1;
+            vertices[idx2] = v2;
+            vertices[idx3] = v3;
+            normals[idx1] = n;
+            normals[idx2] = n;
+            normals[idx3] = n;
         }
+    }
+    
+    void UpdateMeshCpu(float t)
+    {
+        var job = new NoiseMeshJob
+        {
+            pTime = t * m_ShuffleSpeed,
+            pExtent = m_TriangleExtent * (cos(t*1.3f) * 0.3f + 1),
+            pNoiseFrequency = m_NoiseFrequency * (sin(t) * 0.5f + 1),
+            pNoiseAmplitude = m_NoiseAmplitude * (cos(t*1.7f) * 0.3f + 1),
+            pNoiseOffset = m_NoiseOffset,
+            vertices = m_VertexPos,
+            normals = m_VertexNor
+        };
+        if (m_Mode == Mode.CPU)
+        {
+            for (int id = 0; id < m_TriangleCount; ++id)
+                job.Execute(id);
+        }
+        else if (m_Mode == Mode.CPUBurst)
+        {
+            job.Schedule(m_TriangleCount, m_TriangleCount).Complete();
+        }
+        else if (m_Mode == Mode.CPUBurstThreaded)
+        {
+            job.Schedule(m_TriangleCount, 4).Complete();
+        }
+
         m_Mesh.SetVertexBufferData(m_VertexPos, 0, 0, m_VertexPos.Length, 0, MeshUpdateFlags.DontRecalculateBounds);
         m_Mesh.SetVertexBufferData(m_VertexNor, 0, 0, m_VertexNor.Length, 1, MeshUpdateFlags.DontRecalculateBounds);
     }
