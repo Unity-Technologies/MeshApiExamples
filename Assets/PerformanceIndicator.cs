@@ -15,7 +15,7 @@ public class PerformanceIndicator : MonoBehaviour
 
     void OnGUI()
     {
-        GUI.matrix = Matrix4x4.Scale(Vector3.one * 3);
+        GUI.matrix = Matrix4x4.Scale(Vector3.one * 2);
         var rect = new Rect(5, 5, 1000, 20);
         GUI.color = Color.black;
         rect.x += 1;

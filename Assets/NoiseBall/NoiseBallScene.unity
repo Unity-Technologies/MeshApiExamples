@@ -251,13 +251,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1f7da30d5074b4023b2f3efa07fe8622, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_Mode: 0
+  m_Mode: 2
   m_TriangleCount: 100000
   m_TriangleExtent: 0.3
   m_ShuffleSpeed: 4
   m_NoiseAmplitude: 1
   m_NoiseFrequency: 0.5
   m_NoiseMotion: {x: 0, y: 1, z: 0}
+  m_ComputeShader: {fileID: 7200000, guid: 322cc9f2291af47849f7ea2245a8d591, type: 3}
 --- !u!23 &236851688
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -493,7 +494,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1082422885}
   m_LocalRotation: {x: -0.17990762, y: 0.45269376, z: -0.09379815, w: -0.86827624}
-  m_LocalPosition: {x: 3.117269, y: 2.1179469, z: -2.1871934}
+  m_LocalPosition: {x: 1.67, y: 1.7, z: -1.18}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}

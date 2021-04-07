@@ -1,5 +1,5 @@
-// Adapted from Keijiro's NoiseBall2 sample from 2017
-// https://github.com/keijiro/NoiseBall2/blob/master/Assets/SimplexNoise3D.cginc
+// Adapted from Keijiro's NoiseBall2 project from 2017
+// https://github.com/keijiro/NoiseBall2
 
 using Unity.Mathematics;
 using static Unity.Mathematics.math;
