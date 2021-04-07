@@ -11,19 +11,24 @@ A simple example where a dense "water" surface mesh is updated every frame, base
 ![Water](/Images/Water.png?raw=true "Water")
 
 `Assets/ProceduralWaterMesh` is the sample scene and code. Each vertex of the resulting mesh is completely independent of others, and
-only depends on positions of the "wave source" objects. Using C# Jobs / Burst to compute all vertex positions in parallel brings
-some nice speedups.
+only depends on positions of the "wave source" objects.
+Using C# Job System and Burst to compute all vertex positions in parallel brings
+some nice speedups. The sample also implements a similar computation using a GPU compute
+shader to modify the Mesh vertex buffer, for comparison.
 
-Numbers on 250x250 water mesh, with 10 wave source objects, on 2018 MacBookPro (Core i9 2.9GHz):
+Frame times on 400x400 water mesh, with 10 wave source objects, on 2019 MacBookPro (Core i9 2.4GHz, Radeon Pro 5500M); note that these are full frame times including rendering:
 
-- Regular API: 66ms,
-- Jobs+Burst: 3.9ms.
+- Single threaded C#: 155ms
+- Single threaded Burst: 38ms
+- Multi threaded Burst: 9ms
+- GPU compute shader: 4ms
 
-Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads:
+Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads, GeForce GTX 1080Ti, DX11:
 
-- Regular API: 83ms
-- Jobs+Burst: 2.9ms
-
+- Single threaded C#: 208ms
+- Single threaded Burst: 45ms
+- Multi threaded Burst: 11ms
+- GPU compute shader: 2ms
 
 
 ## Combine Many Input Meshes Into One
