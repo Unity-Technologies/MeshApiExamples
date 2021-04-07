@@ -1,0 +1,58 @@
+#pragma kernel KernelWave
+#pragma kernel KernelCalcNormals
+
+RWBuffer<float> bufVertices;
+StructuredBuffer<float3> bufWaveSourcePositions;
+
+float gTime;
+int gVertexCount;
+int gVertexGridX;
+int gVertexGridY;
+int gWaveSourceCount;
+
+[numthreads(64,1,1)]
+void KernelWave (uint3 id : SV_DispatchThreadID)
+{
+    int idx = id.x;
+    if (idx >= gVertexCount)
+        return;
+
+    int vidx = idx * 6;
+    float3 p = float3(bufVertices[vidx+0], bufVertices[vidx+1], bufVertices[vidx+2]);
+    float y = 0;
+    for (int i = 0; i < gWaveSourceCount; ++i)
+    {
+        float2 p1 = p.xz;
+        float2 p2 = bufWaveSourcePositions[i].xz;
+        float dist = length(p1-p2);
+        y += sin(dist * 12 - gTime) / (dist*20+10);
+    }
+    bufVertices[vidx+1] = y;
+}
+
+[numthreads(64,1,1)]
+void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
+{
+    int idx = id.x;
+    if (idx >= gVertexCount)
+        return;
+
+    int idxN = idx - gVertexGridX; if (idxN < 0) idxN = idx;
+    int idxS = idx + gVertexGridX; if (idxN >= gVertexCount) idxS = idx;
+    int idxW = idx - 1; if (idxW < 0) idxW = idx;
+    int idxE = idx + 1; if (idxE >= gVertexCount) idxE = idx;
+    idxN *= 6; idxS *= 6; idxW *= 6; idxE *= 6;
+    float3 pN = float3(bufVertices[idxN+0], bufVertices[idxN+1], bufVertices[idxN+2]);
+    float3 pS = float3(bufVertices[idxS+0], bufVertices[idxS+1], bufVertices[idxS+2]);
+    float3 pW = float3(bufVertices[idxW+0], bufVertices[idxW+1], bufVertices[idxW+2]);
+    float3 pE = float3(bufVertices[idxE+0], bufVertices[idxE+1], bufVertices[idxE+2]);
+    float3 dNS = pS - pN;
+    float3 dWE = pE - pW;
+    float3 n = cross(dWE, dNS);
+    n = normalize(n);
+
+    int vidx = idx * 6;
+    bufVertices[vidx+3] = n.x;
+    bufVertices[vidx+4] = n.y;
+    bufVertices[vidx+5] = n.z;
+}
