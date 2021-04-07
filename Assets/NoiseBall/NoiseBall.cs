@@ -22,7 +22,7 @@ public class NoiseBall : MonoBehaviour
     }
 
     public Mode m_Mode = Mode.CPUBurstThreaded;
-    public int m_TriangleCount = 100;
+    public int m_TriangleCount = 100000;
     public float m_TriangleExtent = 0.1f;
     public float m_ShuffleSpeed = 4.0f;
     public float m_NoiseAmplitude = 1.0f;
@@ -217,6 +217,16 @@ public class NoiseBall : MonoBehaviour
         return float3(float2(cos(u), sin(u)) * sqrt(1 - z * z), z);
     }
 
+    static int TrisToIndex(int tris)
+    {
+        return tris / 100000;
+    }
+
+    static int IndexToTris(int index)
+    {
+        return index * 100000;
+    }
+
     public void OnGUI()
     {
         m_UIOptions ??= new[]
@@ -227,14 +237,15 @@ public class NoiseBall : MonoBehaviour
             new GUIContent("GPU compute"),
         };
         GUI.matrix = Matrix4x4.Scale(Vector3.one * 2);
-        GUILayout.BeginArea(new Rect(5,25,450,90), "Options", GUI.skin.window);
+        GUILayout.BeginArea(new Rect(5,25,420,80), "Options", GUI.skin.window);
         m_Mode = (Mode)GUILayout.Toolbar((int)m_Mode, m_UIOptions);
         GUILayout.BeginHorizontal();
-        GUILayout.Label($"Triangles: {m_TriangleCount}", GUILayout.Width(130));
-        int tris = Mathf.RoundToInt(Mathf.Log10(m_TriangleCount));
-        int newTris = Mathf.RoundToInt(GUILayout.HorizontalSlider(tris, 2, 6));
-        if (newTris != tris)
-            m_TriangleCount = (int)Mathf.Pow(10, newTris);
+        GUILayout.Label($"Triangles: {m_TriangleCount/1000}K", GUILayout.Width(120));
+
+        int triIndex = TrisToIndex(m_TriangleCount);
+        int newTriIndex = Mathf.RoundToInt(GUILayout.HorizontalSlider(triIndex, 1, 10));
+        if (triIndex != newTriIndex)
+            m_TriangleCount = IndexToTris(newTriIndex);
         GUILayout.EndHorizontal();
         GUILayout.EndArea();
     }
