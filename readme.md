@@ -31,6 +31,32 @@ Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads, GeForce GTX 
 - GPU compute shader: 2ms
 
 
+## Noise Ball
+
+A mesh with procedural simplex noise driven mesh. The mesh positions and normals are updated
+every frame, using either CPU code or a GPU compute shader. Based on
+[NoiseBall2](https://github.com/keijiro/NoiseBall2) by Keijiro Takahashi.
+
+![NoiseBall](/Images/NoiseBall.png?raw=true "NoiseBall")
+
+`Assets/NoiseBall` is the sample scene and code. Implementation is very similar to the
+water sample above.
+
+Frame times on a 300 thousand triangle mesh, on 2019 MacBookPro; note that these are full frame times including rendering:
+
+- Single threaded C#: 2723ms
+- Single threaded Burst: 187ms
+- Multi threaded Burst: 22ms
+- GPU compute shader: 14ms
+
+Same scene on Windows, AMD ThreadRipper 1950X 3.4GHz w/ 16 threads, GeForce GTX 1080Ti, DX11:
+
+- Single threaded C#: 3368ms
+- Single threaded Burst: 184ms
+- Multi threaded Burst: 22ms
+- GPU compute shader: 6ms
+
+
 ## Combine Many Input Meshes Into One
 
 A more complex example, where for some hypothetical tooling there's a need to process geometry of many input Meshes, and produce
