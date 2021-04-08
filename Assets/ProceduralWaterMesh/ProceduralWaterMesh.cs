@@ -17,7 +17,9 @@ public class ProceduralWaterMesh : MonoBehaviour
 		CPU,
 		CPUBurst,
 		CPUBurstThreaded,
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2		
 		GPU
+#endif
 	}
 
 	public Mode mode = Mode.CPUBurstThreaded;
@@ -35,8 +37,10 @@ public class ProceduralWaterMesh : MonoBehaviour
 	NativeArray<Vector3> m_WaveSourcePositions;
 	NativeArray<Vector3> m_Vertices;
 	// Buffers for GPU compute shader path
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2	
 	GraphicsBuffer m_GpuWaveSourcePositions;
 	GraphicsBuffer m_GpuVertices;
+#endif
 	
 	GUIContent[] m_UIOptions;
 
@@ -56,19 +60,23 @@ public class ProceduralWaterMesh : MonoBehaviour
 
 	void CleanupComputeResources()
 	{
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2		
 		m_GpuWaveSourcePositions?.Dispose();
 		m_GpuWaveSourcePositions = null;
 		m_GpuVertices?.Dispose();
 		m_GpuVertices = null;
+#endif
 	}
 
 	public void Update()
 	{
 		m_LocalTime += Time.deltaTime * 2.0f;
 		UpdateWaveSourcePositions();
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2		
 		if (mode == Mode.GPU)
 			UpdateWaveGpu();
 		else
+#endif
 			UpdateWaveCpu();
 	}
 
@@ -110,6 +118,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 	}
 
 	// Update water mesh using a GPU compute shader
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2	
 	void UpdateWaveGpu()
 	{
 		// Create GPU buffer for wave source positions, if needed.
@@ -133,6 +142,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 		waveComputeShader.SetBuffer(1, "bufVertices", m_GpuVertices);
 		waveComputeShader.Dispatch(1, (m_Mesh.vertexCount+63)/63, 1, 1);
 	}
+#endif
 
 	void UpdateWaveSourcePositions()
 	{
@@ -169,6 +179,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 		// Use 32 bit index buffer to allow water grids larger than ~250x250
 		newMesh.indexFormat = IndexFormat.UInt32;
 
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.
 		// In order for the GPU code path to work, we want the mesh vertex
 		// buffer to be usable as a "Raw" buffer (RWBuffer) in a compute shader.
 		//
@@ -177,6 +188,7 @@ public class ProceduralWaterMesh : MonoBehaviour
 		// some graphics APIs (most notably DX11). That's why we use a Raw buffer
 		// instead.
 		newMesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+#endif
 
 		// Create initial grid of vertex positions
 		m_Vertices = new NativeArray<Vector3>(surfaceWidthPoints * surfaceLengthPoints, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
@@ -223,13 +235,18 @@ public class ProceduralWaterMesh : MonoBehaviour
 	
 	public void OnGUI()
 	{
-		m_UIOptions ??= new[]
+		if (m_UIOptions == null)
 		{
-			new GUIContent("C# 1 thread"),
-			new GUIContent("Burst 1 thread"),
-			new GUIContent("Burst threaded"),
-			new GUIContent("GPU compute"),
-		};
+			m_UIOptions = new[]
+			{
+				new GUIContent("C# 1 thread"),
+				new GUIContent("Burst 1 thread"),
+				new GUIContent("Burst threaded"),
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2
+                new GUIContent("GPU compute"),
+#endif
+			};
+		}
 		GUI.matrix = Matrix4x4.Scale(Vector3.one * 2);
 		GUILayout.BeginArea(new Rect(5,25,420,80), "Options", GUI.skin.window);
 		mode = (Mode)GUILayout.Toolbar((int)mode, m_UIOptions);

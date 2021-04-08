@@ -18,7 +18,9 @@ public class NoiseBall : MonoBehaviour
         CPU,
         CPUBurst,
         CPUBurstThreaded,
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2
         GPU
+#endif
     }
 
     public Mode m_Mode = Mode.CPUBurstThreaded;
@@ -35,8 +37,10 @@ public class NoiseBall : MonoBehaviour
     NativeArray<Vector3> m_VertexPos;
     NativeArray<Vector3> m_VertexNor;
     Vector3 m_NoiseOffset;
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2    
     GraphicsBuffer m_BufferPos;
     GraphicsBuffer m_BufferNor;
+#endif
 
     GUIContent[] m_UIOptions;
     
@@ -65,10 +69,12 @@ public class NoiseBall : MonoBehaviour
 
     void CleanupGpuResources()
     {
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2        
         m_BufferPos?.Dispose();
         m_BufferPos = null;
         m_BufferNor?.Dispose();
         m_BufferNor = null;
+#endif
     }
 
     public void Update()
@@ -82,7 +88,9 @@ public class NoiseBall : MonoBehaviour
         {
             m_Mesh = new Mesh();
             m_Mesh.name = "NoiseBallMesh";
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2            
             m_Mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+#endif
             
             m_Mesh.SetVertexBufferParams(m_TriangleCount * 3, new VertexAttributeDescriptor(VertexAttribute.Position, stream:0), new VertexAttributeDescriptor(VertexAttribute.Normal, stream:1));
             m_VertexPos = new NativeArray<Vector3>(m_TriangleCount * 3, Allocator.Persistent);
@@ -167,27 +175,9 @@ public class NoiseBall : MonoBehaviour
             vertices = m_VertexPos,
             normals = m_VertexNor
         };
-        if (m_Mode == Mode.CPU)
-        {
-            for (int id = 0; id < m_TriangleCount; ++id)
-                job.Execute(id);
-        }
-        else if (m_Mode == Mode.CPUBurst)
-        {
-            job.Schedule(m_TriangleCount, m_TriangleCount).Complete();
-        }
-        else if (m_Mode == Mode.CPUBurstThreaded)
-        {
-            job.Schedule(m_TriangleCount, 4).Complete();
-        }
-
-        if (m_Mode != Mode.GPU)
-        {
-            m_Mesh.SetVertexBufferData(m_VertexPos, 0, 0, m_VertexPos.Length, 0, MeshUpdateFlags.DontRecalculateBounds);
-            m_Mesh.SetVertexBufferData(m_VertexNor, 0, 0, m_VertexNor.Length, 1, MeshUpdateFlags.DontRecalculateBounds);
-            CleanupGpuResources();
-        }
-        else
+        
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2        
+        if (m_Mode == Mode.GPU)
         {
             m_BufferPos ??= m_Mesh.GetVertexBuffer(0);
             m_BufferNor ??= m_Mesh.GetVertexBuffer(1);
@@ -201,7 +191,26 @@ public class NoiseBall : MonoBehaviour
             m_ComputeShader.SetBuffer(0, "BufVertices", m_BufferPos);
             m_ComputeShader.SetBuffer(0, "BufNormals", m_BufferNor);
             m_ComputeShader.Dispatch(0, (m_TriangleCount+kThreadCount-1)/kThreadCount, 1, 1);
+            return;
         }
+#endif
+        
+        if (m_Mode == Mode.CPU)
+        {
+            for (int id = 0; id < m_TriangleCount; ++id)
+                job.Execute(id);
+        }
+        else if (m_Mode == Mode.CPUBurst)
+        {
+            job.Schedule(m_TriangleCount, m_TriangleCount).Complete();
+        }
+        else if (m_Mode == Mode.CPUBurstThreaded)
+        {
+            job.Schedule(m_TriangleCount, 4).Complete();
+        }
+        m_Mesh.SetVertexBufferData(m_VertexPos, 0, 0, m_VertexPos.Length, 0, MeshUpdateFlags.DontRecalculateBounds);
+        m_Mesh.SetVertexBufferData(m_VertexNor, 0, 0, m_VertexNor.Length, 1, MeshUpdateFlags.DontRecalculateBounds);
+        CleanupGpuResources();
     }
     
     static float Random(float u, float v)
@@ -229,13 +238,18 @@ public class NoiseBall : MonoBehaviour
 
     public void OnGUI()
     {
-        m_UIOptions ??= new[]
+        if (m_UIOptions == null)
         {
-            new GUIContent("C# 1 thread"),
-            new GUIContent("Burst 1 thread"),
-            new GUIContent("Burst threaded"),
-            new GUIContent("GPU compute"),
-        };
+            m_UIOptions = new[]
+            {
+                new GUIContent("C# 1 thread"),
+                new GUIContent("Burst 1 thread"),
+                new GUIContent("Burst threaded"),
+#if UNITY_2021_2_OR_NEWER // Mesh GPU buffer access is since 2021.2            
+                new GUIContent("GPU compute"),
+#endif
+            };
+        }
         GUI.matrix = Matrix4x4.Scale(Vector3.one * 2);
         GUILayout.BeginArea(new Rect(5,25,420,80), "Options", GUI.skin.window);
         m_Mode = (Mode)GUILayout.Toolbar((int)m_Mode, m_UIOptions);

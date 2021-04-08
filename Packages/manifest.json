@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "com.unity.burst": "1.5.0",
+    "com.unity.burst": "1.5.1",
     "com.unity.ide.rider": "3.0.5",
     "com.unity.mathematics": "1.2.1",
     "com.unity.modules.ai": "1.0.0",

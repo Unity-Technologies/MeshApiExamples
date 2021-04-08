@@ -4,6 +4,9 @@ Unity 2020.1 adds `MeshData` APIs for C# Jobs/Burst compatible way of reading & 
 
 This repository contains several small examples of that. Required Unity version is **2020.1** or later.
 
+When on Unity 2021.2 or later version, the examples also show how to use GPU Compute Shaders to
+access and modify Mesh vertex buffers.
+
 ## Procedural Water/Wave Mesh
 
 A simple example where a dense "water" surface mesh is updated every frame, based on positions on "wave source" objects.
