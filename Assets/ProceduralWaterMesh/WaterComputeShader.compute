@@ -1,7 +1,16 @@
+// Compute shader example for the ProceduralWaterMesh
+// Does the same calculation as the C# code in ProceduralWaterMesh.cs
+
 #pragma kernel KernelWave
 #pragma kernel KernelCalcNormals
 
+// A "Raw" buffer is used to access the mesh vertex buffer.
+//
+// Note that while using StructuredBuffer might be more convenient, a
+// vertex buffer that is also a structured buffer is not supported on
+// some graphics APIs (most notably DX11).
 RWBuffer<float> bufVertices;
+
 StructuredBuffer<float3> bufWaveSourcePositions;
 
 float gTime;
@@ -17,6 +26,8 @@ void KernelWave (uint3 id : SV_DispatchThreadID)
     if (idx >= gVertexCount)
         return;
 
+    // We know that our vertex layout is 6 floats per vertex
+    // (float3 position + float3 normal).
     int vidx = idx * 6;
     float3 p = float3(bufVertices[vidx+0], bufVertices[vidx+1], bufVertices[vidx+2]);
     float y = 0;
@@ -27,6 +38,7 @@ void KernelWave (uint3 id : SV_DispatchThreadID)
         float dist = length(p1-p2);
         y += sin(dist * 12 - gTime) / (dist*20+10);
     }
+    // Change the vertex position .y coordinate.
     bufVertices[vidx+1] = y;
 }
 
@@ -41,6 +53,9 @@ void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
     int idxS = idx + gVertexGridX; if (idxN >= gVertexCount) idxS = idx;
     int idxW = idx - 1; if (idxW < 0) idxW = idx;
     int idxE = idx + 1; if (idxE >= gVertexCount) idxE = idx;
+
+    // We know that our vertex layout is 6 floats per vertex
+    // (float3 position + float3 normal).    
     idxN *= 6; idxS *= 6; idxW *= 6; idxE *= 6;
     float3 pN = float3(bufVertices[idxN+0], bufVertices[idxN+1], bufVertices[idxN+2]);
     float3 pS = float3(bufVertices[idxS+0], bufVertices[idxS+1], bufVertices[idxS+2]);
@@ -51,6 +66,7 @@ void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
     float3 n = cross(dWE, dNS);
     n = normalize(n);
 
+    // Change the vertex normal xyz coordinates.
     int vidx = idx * 6;
     bufVertices[vidx+3] = n.x;
     bufVertices[vidx+4] = n.y;
