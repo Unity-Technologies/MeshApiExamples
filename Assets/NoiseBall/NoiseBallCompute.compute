@@ -5,8 +5,8 @@
 
 #include "SimplexNoise3D.cginc"
 
-RWBuffer<float> BufVertices;
-RWBuffer<float> BufNormals;
+RWByteAddressBuffer BufVertices;
+RWByteAddressBuffer BufNormals;
 float pTime;
 float pExtent;
 float pNoiseFrequency;
@@ -27,11 +27,10 @@ float3 RandomPoint(float id)
     return float3(float2(cos(u), sin(u)) * sqrt(1 - z * z), z);
 }
 
-void Store(RWBuffer<float> buf, int index, float3 v)
+void Store(RWByteAddressBuffer buf, int index, float3 v)
 {
-    buf[index*3+0] = v.x;
-    buf[index*3+1] = v.y;
-    buf[index*3+2] = v.z;
+    uint3 data = asuint(v);
+    buf.Store3((index*3)<<2, data);
 }
 
 [numthreads(64, 1, 1)]

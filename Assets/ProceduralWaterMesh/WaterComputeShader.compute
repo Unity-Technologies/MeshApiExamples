@@ -9,7 +9,7 @@
 // Note that while using StructuredBuffer might be more convenient, a
 // vertex buffer that is also a structured buffer is not supported on
 // some graphics APIs (most notably DX11).
-RWBuffer<float> bufVertices;
+RWByteAddressBuffer bufVertices;
 
 StructuredBuffer<float3> bufWaveSourcePositions;
 
@@ -29,7 +29,8 @@ void KernelWave (uint3 id : SV_DispatchThreadID)
     // We know that our vertex layout is 6 floats per vertex
     // (float3 position + float3 normal).
     int vidx = idx * 6;
-    float3 p = float3(bufVertices[vidx+0], bufVertices[vidx+1], bufVertices[vidx+2]);
+    uint3 praw = bufVertices.Load3(vidx<<2);
+    float3 p = asfloat(praw);
     float y = 0;
     for (int i = 0; i < gWaveSourceCount; ++i)
     {
@@ -39,7 +40,7 @@ void KernelWave (uint3 id : SV_DispatchThreadID)
         y += sin(dist * 12 - gTime) / (dist*20+10);
     }
     // Change the vertex position .y coordinate.
-    bufVertices[vidx+1] = y;
+    bufVertices.Store((vidx+1)<<2, asuint(y));
 }
 
 [numthreads(64,1,1)]
@@ -57,10 +58,10 @@ void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
     // We know that our vertex layout is 6 floats per vertex
     // (float3 position + float3 normal).    
     idxN *= 6; idxS *= 6; idxW *= 6; idxE *= 6;
-    float3 pN = float3(bufVertices[idxN+0], bufVertices[idxN+1], bufVertices[idxN+2]);
-    float3 pS = float3(bufVertices[idxS+0], bufVertices[idxS+1], bufVertices[idxS+2]);
-    float3 pW = float3(bufVertices[idxW+0], bufVertices[idxW+1], bufVertices[idxW+2]);
-    float3 pE = float3(bufVertices[idxE+0], bufVertices[idxE+1], bufVertices[idxE+2]);
+    float3 pN = asfloat(bufVertices.Load3(idxN<<2));
+    float3 pS = asfloat(bufVertices.Load3(idxS<<2));
+    float3 pW = asfloat(bufVertices.Load3(idxW<<2));
+    float3 pE = asfloat(bufVertices.Load3(idxE<<2));
     float3 dNS = pS - pN;
     float3 dWE = pE - pW;
     float3 n = cross(dWE, dNS);
@@ -68,7 +69,5 @@ void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
 
     // Change the vertex normal xyz coordinates.
     int vidx = idx * 6;
-    bufVertices[vidx+3] = n.x;
-    bufVertices[vidx+4] = n.y;
-    bufVertices[vidx+5] = n.z;
+    bufVertices.Store3((vidx+3)<<2, asuint(n));
 }
