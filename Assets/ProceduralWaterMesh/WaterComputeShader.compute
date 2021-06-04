@@ -1,0 +1,73 @@
+// Compute shader example for the ProceduralWaterMesh
+// Does the same calculation as the C# code in ProceduralWaterMesh.cs
+
+#pragma kernel KernelWave
+#pragma kernel KernelCalcNormals
+
+// A "Raw" buffer is used to access the mesh vertex buffer.
+//
+// Note that while using StructuredBuffer might be more convenient, a
+// vertex buffer that is also a structured buffer is not supported on
+// some graphics APIs (most notably DX11).
+RWByteAddressBuffer bufVertices;
+
+StructuredBuffer<float3> bufWaveSourcePositions;
+
+float gTime;
+int gVertexCount;
+int gVertexGridX;
+int gVertexGridY;
+int gWaveSourceCount;
+
+[numthreads(64,1,1)]
+void KernelWave (uint3 id : SV_DispatchThreadID)
+{
+    int idx = id.x;
+    if (idx >= gVertexCount)
+        return;
+
+    // We know that our vertex layout is 6 floats per vertex
+    // (float3 position + float3 normal).
+    int vidx = idx * 6;
+    uint3 praw = bufVertices.Load3(vidx<<2);
+    float3 p = asfloat(praw);
+    float y = 0;
+    for (int i = 0; i < gWaveSourceCount; ++i)
+    {
+        float2 p1 = p.xz;
+        float2 p2 = bufWaveSourcePositions[i].xz;
+        float dist = length(p1-p2);
+        y += sin(dist * 12 - gTime) / (dist*20+10);
+    }
+    // Change the vertex position .y coordinate.
+    bufVertices.Store((vidx+1)<<2, asuint(y));
+}
+
+[numthreads(64,1,1)]
+void KernelCalcNormals (uint3 id : SV_DispatchThreadID)
+{
+    int idx = id.x;
+    if (idx >= gVertexCount)
+        return;
+
+    int idxN = idx - gVertexGridX; if (idxN < 0) idxN = idx;
+    int idxS = idx + gVertexGridX; if (idxN >= gVertexCount) idxS = idx;
+    int idxW = idx - 1; if (idxW < 0) idxW = idx;
+    int idxE = idx + 1; if (idxE >= gVertexCount) idxE = idx;
+
+    // We know that our vertex layout is 6 floats per vertex
+    // (float3 position + float3 normal).    
+    idxN *= 6; idxS *= 6; idxW *= 6; idxE *= 6;
+    float3 pN = asfloat(bufVertices.Load3(idxN<<2));
+    float3 pS = asfloat(bufVertices.Load3(idxS<<2));
+    float3 pW = asfloat(bufVertices.Load3(idxW<<2));
+    float3 pE = asfloat(bufVertices.Load3(idxE<<2));
+    float3 dNS = pS - pN;
+    float3 dWE = pE - pW;
+    float3 n = cross(dWE, dNS);
+    n = normalize(n);
+
+    // Change the vertex normal xyz coordinates.
+    int vidx = idx * 6;
+    bufVertices.Store3((vidx+3)<<2, asuint(n));
+}

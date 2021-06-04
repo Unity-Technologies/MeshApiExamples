@@ -23,7 +23,8 @@ public class CreateSceneMesh : MonoBehaviour
     static ProfilerMarker smp2 = new ProfilerMarker("Prepare");
     static ProfilerMarker smp3 = new ProfilerMarker("Create Mesh");
     static ProfilerMarker smp4 = new ProfilerMarker("Cleanup");
-    
+
+    #if UNITY_EDITOR
     // ----------------------------------------------------------------------------------------------------------------
     // New Unity 2020.1 MeshData API
     //
@@ -36,7 +37,7 @@ public class CreateSceneMesh : MonoBehaviour
     public static void CreateMesh_MeshDataApi()
     {
         var sw = Stopwatch.StartNew();
-        
+
         // Find all MeshFilter objects in the scene
         smp1.Begin();
         var meshFilters = FindObjectsOfType<MeshFilter>();
@@ -48,7 +49,7 @@ public class CreateSceneMesh : MonoBehaviour
         var jobs = new ProcessMeshDataJob();
         jobs.CreateInputArrays(meshFilters.Length);
         var inputMeshes = new List<Mesh>(meshFilters.Length);
-        
+
         var vertexStart = 0;
         var indexStart = 0;
         var meshCount = 0;
@@ -76,7 +77,7 @@ public class CreateSceneMesh : MonoBehaviour
 
         // Acquire read-only data for input meshes
         jobs.meshData = Mesh.AcquireReadOnlyMeshData(inputMeshes);
-        
+
         // Create and initialize writable data for the output mesh
         var outputMeshData = Mesh.AllocateWritableMeshData(1);
         jobs.outputMesh = outputMeshData[0];
@@ -95,7 +96,7 @@ public class CreateSceneMesh : MonoBehaviour
         var sm = new SubMeshDescriptor(0, indexStart, MeshTopology.Triangles);
         sm.firstVertex = 0;
         sm.vertexCount = vertexStart;
-        
+
         // Wait for jobs to finish, since we'll have to access the produced mesh/bounds data at this point
         handle.Complete();
 
@@ -113,7 +114,7 @@ public class CreateSceneMesh : MonoBehaviour
         Mesh.ApplyAndDisposeWritableMeshData(outputMeshData, new[]{newMesh}, MeshUpdateFlags.DontRecalculateBounds | MeshUpdateFlags.DontValidateIndices | MeshUpdateFlags.DontNotifyMeshUsers);
         newMesh.bounds = sm.bounds;
         smp3.End();
-        
+
         // Dispose of the read-only mesh data and temporary bounds array
         smp4.Begin();
         jobs.meshData.Dispose();
@@ -128,10 +129,10 @@ public class CreateSceneMesh : MonoBehaviour
         newMr.material = AssetDatabase.LoadAssetAtPath<Material>("Assets/CreateMeshFromAllSceneMeshes/MaterialForNewlyCreatedMesh.mat");
         newMf.sharedMesh = newMesh;
         //newMesh.RecalculateNormals(); // faster to do normal xform in the job
-        
+
         var dur = sw.ElapsedMilliseconds;
         Debug.Log($"Took {dur/1000.0:F2}sec for {meshCount} objects, total {vertexStart} verts");
-        
+
         Selection.activeObject = newGo;
     }
 
@@ -158,7 +159,7 @@ public class CreateSceneMesh : MonoBehaviour
 
         public void Execute(int index)
         {
-            var data = meshData[index]; 
+            var data = meshData[index];
             var vCount = data.vertexCount;
             var mat = xform[index];
             var vStart = vertexStart[index];
@@ -178,7 +179,7 @@ public class CreateSceneMesh : MonoBehaviour
             // do any necessary format conversions into float3 data
             data.GetVertices(tempVertices.Reinterpret<Vector3>());
             data.GetNormals(tempNormals.Reinterpret<Vector3>());
-            
+
             var outputVerts = outputMesh.GetVertexData<Vector3>();
             var outputNormals = outputMesh.GetVertexData<Vector3>(stream:1);
 
@@ -216,7 +217,7 @@ public class CreateSceneMesh : MonoBehaviour
             }
         }
     }
-        
+
     // ----------------------------------------------------------------------------------------------------------------
     // "Traditional" Mesh API
     //
@@ -278,7 +279,7 @@ public class CreateSceneMesh : MonoBehaviour
         //newMesh.SetNormals(allNormals);
         newMesh.SetTriangles(allIndices, 0);
         smp3.End();
-        
+
         var newGo = new GameObject("CombinedMesh", typeof(MeshFilter), typeof(MeshRenderer));
         newGo.tag = "EditorOnly";
         var newMf = newGo.GetComponent<MeshFilter>();
@@ -286,10 +287,11 @@ public class CreateSceneMesh : MonoBehaviour
         newMr.material = AssetDatabase.LoadAssetAtPath<Material>("Assets/CreateMeshFromAllSceneMeshes/MaterialForNewlyCreatedMesh.mat");
         newMf.sharedMesh = newMesh;
         newMesh.RecalculateNormals();
-        
+
         var dur = sw.ElapsedMilliseconds;
         Debug.Log($"Took {dur/1000.0:F2}sec for {meshFilters.Length} objects, total {allVerts.Count} verts");
-        
+
         Selection.activeObject = newGo;
     }
+    #endif // #if UNITY_EDITOR
 }

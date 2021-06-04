@@ -1,0 +1,74 @@
+// Adapted from Keijiro's NoiseBall2 project from 2017
+// https://github.com/keijiro/NoiseBall2
+
+#pragma kernel NoiseMesh
+
+#include "SimplexNoise3D.cginc"
+
+RWByteAddressBuffer BufVertices;
+RWByteAddressBuffer BufNormals;
+float pTime;
+float pExtent;
+float pNoiseFrequency;
+float pNoiseAmplitude;
+float3 pNoiseOffset;
+int pTriCount;
+
+float Random(float u, float v)
+{
+    float f = dot(float2(12.9898, 78.233), float2(u, v));
+    return frac(43758.5453 * sin(f));
+}
+
+float3 RandomPoint(float id)
+{
+    float u = Random(id * 0.01334, 0.3728) * 3.1415926 * 2;
+    float z = Random(0.8372, id * 0.01197) * 2 - 1;
+    return float3(float2(cos(u), sin(u)) * sqrt(1 - z * z), z);
+}
+
+void Store(RWByteAddressBuffer buf, int index, float3 v)
+{
+    uint3 data = asuint(v);
+    buf.Store3((index*3)<<2, data);
+}
+
+[numthreads(64, 1, 1)]
+void NoiseMesh(uint3 dtid : SV_DispatchThreadID)
+{
+    int id = dtid.x;
+    if (id >= pTriCount)
+        return;
+    int idx1 = id * 3;
+    int idx2 = id * 3 + 1;
+    int idx3 = id * 3 + 2;
+
+    float seed = floor(pTime + id * 0.1) * 0.1;
+    float3 v1 = RandomPoint(idx1 + seed);
+    float3 v2 = RandomPoint(idx2 + seed);
+    float3 v3 = RandomPoint(idx3 + seed);
+
+    v2 = normalize(v1 + normalize(v2 - v1) * pExtent);
+    v3 = normalize(v1 + normalize(v3 - v1) * pExtent);
+
+    float l1 = snoise(v1 * pNoiseFrequency + pNoiseOffset).w;
+    float l2 = snoise(v2 * pNoiseFrequency + pNoiseOffset).w;
+    float l3 = snoise(v3 * pNoiseFrequency + pNoiseOffset).w;
+
+    l1 = abs(l1 * l1 * l1);
+    l2 = abs(l2 * l2 * l2);
+    l3 = abs(l3 * l3 * l3);
+
+    v1 *= 1 + l1 * pNoiseAmplitude;
+    v2 *= 1 + l2 * pNoiseAmplitude;
+    v3 *= 1 + l3 * pNoiseAmplitude;
+
+    float3 n = normalize(cross(v2 - v1, v3 - v2));
+
+    Store(BufVertices, idx1, v1);
+    Store(BufVertices, idx2, v2);
+    Store(BufVertices, idx3, v3);
+    Store(BufNormals, idx1, n);
+    Store(BufNormals, idx2, n);
+    Store(BufNormals, idx3, n);
+}
