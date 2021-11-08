@@ -12,13 +12,14 @@ using UnityEngine.Rendering;
 using Debug = UnityEngine.Debug;
 
 // Finds all MeshFilter components in the scene, and creates a new giant Mesh out of all of them (except the ones with
-// "EditorOnly" tag). This is similar to what "static batching" would do -- take input meshes, transform their
+// "CombinedMesh_DontCombineMeAgain" name). This is similar to what "static batching" would do -- take input meshes, transform their
 // vertices/normals into world space, add to the output mesh.
 //
 // One approach is using C# Jobs, Burst and the new 2020.1 MeshData API. Another implementation further below is
 // using "traditional" Mesh API.
 public class CreateSceneMesh : MonoBehaviour
 {
+    const string kCombinedMeshName = "CombinedMesh_DontCombineMeAgain";
     static ProfilerMarker smp1 = new ProfilerMarker("Find Meshes");
     static ProfilerMarker smp2 = new ProfilerMarker("Prepare");
     static ProfilerMarker smp3 = new ProfilerMarker("Create Mesh");
@@ -57,7 +58,7 @@ public class CreateSceneMesh : MonoBehaviour
         {
             var mf = meshFilters[i];
             var go = mf.gameObject;
-            if (go.CompareTag("EditorOnly"))
+            if (go.name == kCombinedMeshName)
             {
                 DestroyImmediate(go);
                 continue;
@@ -122,8 +123,7 @@ public class CreateSceneMesh : MonoBehaviour
         smp4.End();
 
         // Create new GameObject with the new mesh
-        var newGo = new GameObject("CombinedMesh", typeof(MeshFilter), typeof(MeshRenderer));
-        newGo.tag = "EditorOnly";
+        var newGo = new GameObject(kCombinedMeshName, typeof(MeshFilter), typeof(MeshRenderer));
         var newMf = newGo.GetComponent<MeshFilter>();
         var newMr = newGo.GetComponent<MeshRenderer>();
         newMr.material = AssetDatabase.LoadAssetAtPath<Material>("Assets/CreateMeshFromAllSceneMeshes/MaterialForNewlyCreatedMesh.mat");
