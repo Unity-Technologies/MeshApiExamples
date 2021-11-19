@@ -1,10 +1,9 @@
 fileFormatVersion: 2
-guid: 37d23fbc3510846f08d99efd30d76d65
+guid: 39a47d63ba8c4458e8379a6fca917362
 MonoImporter:
   externalObjects: {}
   serializedVersion: 2
-  defaultReferences:
-  - waveComputeShader: {fileID: 7200000, guid: 3d090ef09c4ef4adf9f0cce3336393fc, type: 3}
+  defaultReferences: []
   executionOrder: 0
   icon: {instanceID: 0}
   userData: 

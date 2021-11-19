@@ -4,6 +4,9 @@
 /UserSettings/
 /obj/
 
+# macOS
+.DS_Store
+
 # Rider
 /Assets/Plugins/Editor/JetBrains*
 /.idea/
@@ -21,3 +24,4 @@
 *.mdb
 *.opendb
 *.VC.db
+Builds/*
